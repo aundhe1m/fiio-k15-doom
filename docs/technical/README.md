@@ -33,6 +33,7 @@ tools/                      build-all.sh (the pipeline, in the container), rootf
                             patch_json.py, make_icon.py, bootanim.py, treediff.py, pkg_build.py, pkg_verify.py
 rootfs-overlay/NOTICE       shipped as /usr/share/doc/doom-fw/NOTICE
 assets/doom-logo.svg        the DOOM wordmark (public-domain text logo) used for icons, menu and boot animation
+assets/readme-logo.svg      the same wordmark with a gradient fill, for the repository README header
 ```
 
 ## License and credits
