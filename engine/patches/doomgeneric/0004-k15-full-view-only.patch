@@ -1,0 +1,43 @@
+diff -ruN a/doomgeneric/m_menu.c b/doomgeneric/m_menu.c
+--- a/doomgeneric/m_menu.c
++++ b/doomgeneric/m_menu.c
+@@ -1215,7 +1215,7 @@
+     switch(choice)
+     {
+       case 0:
+-	if (screenSize > 0)
++	if (screenSize > (WIDE_DELTA ? 8 : 0))
+ 	{
+ 	    screenblocks--;
+ 	    screenSize--;
+@@ -2081,6 +2081,8 @@
+     itemOn = currentMenu->lastOn;
+     whichSkull = 0;
+     skullAnimCounter = 10;
++    if (WIDE_DELTA && screenblocks < 11)
++        screenblocks = 11; // an old config may hold a smaller size (see R_SetViewSize)
+     screenSize = screenblocks - 3;
+     messageToPrint = 0;
+     messageString = NULL;
+diff -ruN a/doomgeneric/r_main.c b/doomgeneric/r_main.c
+--- a/doomgeneric/r_main.c
++++ b/doomgeneric/r_main.c
+@@ -28,6 +28,7 @@
+ 
+ #include "doomdef.h"
+ #include "d_loop.h"
++#include "i_video.h"
+ 
+ #include "m_bbox.h"
+ #include "m_menu.h"
+@@ -654,6 +655,10 @@
+ ( int		blocks,
+   int		detail )
+ {
++    // Widescreen: our HUD replaces the status bar, so a shrunk view would leave the
++    // area below it undrawn. Full view only (menu, "-" key, config, stick overlay).
++    if (WIDE_DELTA && blocks < 11)
++        blocks = 11;
+     setsizeneeded = true;
+     setblocks = blocks;
+     setdetail = detail;

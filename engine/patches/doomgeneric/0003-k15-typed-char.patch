@@ -1,0 +1,20 @@
+diff -ruN a/doomgeneric/i_input.c b/doomgeneric/i_input.c
+--- a/doomgeneric/i_input.c
++++ b/doomgeneric/i_input.c
+@@ -296,6 +296,16 @@
+             event.type = ev_keydown;
+             event.data1 = TranslateKey(key);
+             event.data2 = GetTypedChar(key);
++#ifdef K15
++            {
++                // The backend may type a different character than the key it maps to
++                // (WASD moves in a level, but "iddqd" still has to work).
++                extern int K15_TypedChar(void);
++                int typed = K15_TypedChar();
++                if (typed >= 0)
++                    event.data2 = typed;
++            }
++#endif
+ 
+             if (event.data1 != 0)
+             {

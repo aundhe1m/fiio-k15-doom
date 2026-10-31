@@ -1,0 +1,141 @@
+diff -ruN a/doomgeneric/d_main.c b/doomgeneric/d_main.c
+--- a/doomgeneric/d_main.c
++++ b/doomgeneric/d_main.c
+@@ -125,7 +125,11 @@
+ char		wadfile[1024];		// primary wad file
+ char		mapdir[1024];           // directory of development maps
+ 
++#ifdef K15
++int             show_endoom = 0; // ENDOOM's exit(0) would skip the K15 quit path
++#else
+ int             show_endoom = 1;
++#endif
+ 
+ 
+ void D_ConnectNetGame(void);
+@@ -1319,7 +1323,12 @@
+     {
+         // Auto-detect the configuration dir.
+ 
++#ifdef K15
++        extern char *K15_ConfigDir(void);
++        M_SetConfigDir(K15_ConfigDir());
++#else
+         M_SetConfigDir(NULL);
++#endif
+     }
+ 
+     //!
+diff -ruN a/doomgeneric/i_system.c b/doomgeneric/i_system.c
+--- a/doomgeneric/i_system.c
++++ b/doomgeneric/i_system.c
+@@ -261,6 +261,10 @@
+     SDL_Quit();
+ 
+     exit(0);
++#elif defined(K15)
++    // Exit funcs above already saved the config; the backend's atexit handler decides
++    // whether to return to the K15 DOOM menu or to the stock UI.
++    exit(0);
+ #endif
+ }
+ 
+@@ -403,6 +407,15 @@
+         entry = entry->next;
+     }
+ 
++#ifdef K15
++    {
++        // The K15 backend shows the message in its own menu after exit.
++        extern void K15_SetError(const char *msg);
++        K15_SetError(msgbuf);
++        exit(-1);
++    }
++#endif
++
+     exit_gui_popup = !M_ParmExists("-nogui");
+ 
+     // Pop up a GUI dialog box to show the error message, if the
+diff -ruN a/doomgeneric/m_config.c b/doomgeneric/m_config.c
+--- a/doomgeneric/m_config.c
++++ b/doomgeneric/m_config.c
+@@ -1608,7 +1608,7 @@
+ 
+ static void SaveDefaultCollection(default_collection_t *collection)
+ {
+-#if ORIGCODE
++#if ORIGCODE || defined(K15)
+     default_t *defaults;
+     int i, v;
+     FILE *f;
+@@ -1753,6 +1753,13 @@
+             {
+                 intparm = scantokey[intparm];
+             }
++#ifdef K15
++            else if (intparm < 256)
++            {
++                // doomgeneric's own key codes (KEY_FIRE 0xa3, KEY_USE 0xa2,
++                // KEY_STRAFE_L/R) have no scancode and are saved untranslated.
++            }
++#endif
+             else
+             {
+                 intparm = 0;
+@@ -1770,7 +1777,7 @@
+ 
+ static void LoadDefaultCollection(default_collection_t *collection)
+ {
+-#if ORIGCODE
++#if ORIGCODE || defined(K15)
+     FILE *f;
+     default_t *def;
+     char defname[80];
+@@ -1930,6 +1937,27 @@
+ 
+     LoadDefaultCollection(&doom_defaults);
+     LoadDefaultCollection(&extra_defaults);
++
++#ifdef K15
++    //!
++    // @arg <file>
++    //
++    // K15: apply a vanilla-format config (e.g. doom.cfg on the USB stick root) on top
++    // of the saved one. Settings are still saved to the normal file on quit.
++    //
++
++    i = M_CheckParmWithArgs("-k15overlay", 1);
++
++    if (i)
++    {
++        char *saved = doom_defaults.filename;
++
++        printf("        overlay configuration file: %s\n", myargv[i+1]);
++        doom_defaults.filename = myargv[i+1];
++        LoadDefaultCollection(&doom_defaults);
++        doom_defaults.filename = saved;
++    }
++#endif
+ }
+ 
+ // Get a configuration file variable by its name
+@@ -2087,7 +2115,7 @@
+ char *M_GetSaveGameDir(char *iwadname)
+ {
+     char *savegamedir;
+-#if ORIGCODE
++#if ORIGCODE || defined(K15)
+     char *topdir;
+ #endif
+ 
+@@ -2100,8 +2128,9 @@
+     }
+     else
+     {
+-#if ORIGCODE
++#if ORIGCODE || defined(K15)
+         // ~/.chocolate-doom/savegames
++        // (K15: one directory per IWAD so DOOM and DOOM II saves can't collide.)
+ 
+         topdir = M_StringJoin(configdir, "savegame", NULL);
+         M_MakeDirectory(topdir);

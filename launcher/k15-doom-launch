@@ -1,0 +1,127 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# k15-doom-launch: started by the patched mq_ui (Settings -> Others -> DOOM, and the DOOM
+# tile in the swipe-right source grid) as
+#   system("/usr/bin/k15-doom-launch </dev/null >/dev/null 2>&1 &")
+# so it runs as root, ppid 1, with mq_ui's non-CLOEXEC fds (fb0, touch) inherited.
+#
+# 1. single instance, detach with setsid, drop inherited fds
+# 2. pick the engine: /usr/data/doom/doomk15 (DEV BUILD) wins over /usr/bin/doomk15
+# 3. get the SoC->DAC path: DOOM needs input Local Play (8) or Streaming (7) and a free
+#    hw:0,4. Other inputs -> switch to Local Play. If a (paused) stock song still holds
+#    hw:0,4, bounce to the other SoC input, which makes mq_player close the PCM.
+#    Only the stock UI's own SET_INPUT_MODE message (0657000C<id>) is sent.
+# 4. run doomk15 (home menu -> game) with logs capped, then pan the display back and
+#    restore the previous input, also when DOOM crashes or the launcher is signalled.
+#
+# Dev overrides (env): K15_HOME, K15_MQSEND, K15_DOOM_SYSBIN.
+
+exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&-
+
+D=${K15_HOME:-/usr/data/doom}
+LOG=$D/launch.log
+GAMELOG=$D/doom.log
+LOG_MAX=65536
+SYS_BIN=${K15_DOOM_SYSBIN:-/usr/bin/doomk15}
+DEV_BIN=$D/doomk15
+MQSEND=${K15_MQSEND:-/usr/bin/k15-mqsend}
+DB='file:/usr/data/fiio/db/sysconfig.db?immutable=1'
+PCM=/proc/asound/card0/pcm4p/sub0/status
+LOCK=/tmp/k15-doom.lock
+
+log() { echo "$(date '+%F %T') [$$] $*" >> "$LOG"; }
+cap() { [ -f "$1" ] && [ "$(wc -c < "$1")" -gt "$2" ] && mv -f "$1" "$1.1"; }
+input() { sqlite3 "$DB" 'select INPUT_MODE from SYSCONFIG;' 2>/dev/null; }
+pcm_busy() { [ -r "$PCM" ] && [ "$(cat "$PCM")" != closed ]; }
+set_input() { "$MQSEND" "$(printf '0657000C%04X' "$1")"; }
+
+mkdir -p "$D"
+
+if [ "$1" != --detached ]; then
+    cap "$LOG" "$LOG_MAX"
+    if [ -d "$LOCK" ] && ! kill -0 "$(cat "$LOCK/pid" 2>/dev/null)" 2>/dev/null; then
+        log "removing stale lock"
+        rm -rf "$LOCK"
+    fi
+    if pidof doomk15 >/dev/null || [ -d "$LOCK" ]; then
+        log "already running, ignoring launch"
+        exit 0
+    fi
+    setsid "$0" --detached </dev/null >/dev/null 2>&1 &
+    exit 0
+fi
+
+if ! mkdir "$LOCK" 2>/dev/null; then
+    log "already running (lock $LOCK), ignoring launch"
+    exit 0
+fi
+echo $$ > "$LOCK/pid"
+
+BIN=$SYS_BIN
+switched=
+prev=
+
+cleanup() {
+    trap '' INT TERM HUP
+    "$BIN" --restore 2>/dev/null
+    if [ -n "$switched" ]; then
+        if set_input "$prev"; then
+            log "restored input $prev"
+        else
+            log "failed to restore input $prev"
+        fi
+    fi
+    rm -rf "$LOCK"
+    log "exit"
+}
+trap cleanup EXIT
+trap 'log "signalled"; [ -n "$child" ] && kill "$child" 2>/dev/null; exit 130' INT TERM HUP
+
+if [ -x "$DEV_BIN" ]; then
+    BIN=$DEV_BIN
+    export K15_DEV_BUILD=1
+    log "DEV BUILD: using $DEV_BIN"
+fi
+if [ ! -x "$BIN" ]; then
+    log "no doomk15 at $BIN"
+    exit 1
+fi
+
+prev=$(input)
+target=
+case "$prev" in
+    7|8)
+        if pcm_busy; then
+            # A paused/playing stock stream holds hw:0,4; changing input makes the
+            # player close it.
+            [ "$prev" = 8 ] && target=7 || target=8
+            log "hw:0,4 busy ($(cat "$PCM" | head -1)) on input $prev"
+        fi
+        ;;
+    "") log "could not read the current input, not switching" ;;
+    *) target=8 ;;
+esac
+log "launch: input=$prev bin=$BIN"
+
+if [ -n "$target" ]; then
+    if set_input "$target"; then
+        switched=1
+        i=0
+        while [ $i -lt 30 ]; do
+            [ "$(input)" = "$target" ] && ! pcm_busy && break
+            sleep 0.1
+            i=$((i + 1))
+        done
+        log "switched input $prev -> $target (now $(input), pcm $(head -1 "$PCM" 2>/dev/null))"
+    else
+        log "input switch to $target failed"
+    fi
+fi
+
+cap "$GAMELOG" 0
+"$BIN" >> "$GAMELOG" 2>&1 &
+child=$!
+wait "$child"
+rc=$?
+child=
+log "doomk15 exited rc=$rc"

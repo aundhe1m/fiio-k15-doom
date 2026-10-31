@@ -1,0 +1,5 @@
+build/
+out/
+*.wad
+*.WAD
+__pycache__/

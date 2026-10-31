@@ -1,0 +1,28 @@
+DOOM for the FiiO K15 (doom-fw)
+===============================
+
+This firmware was built on the owner's own machine by the DOOM Firmware Builder from the
+official FiiO K15 v159 update the owner supplied. It adds:
+
+  /usr/bin/doomk15            DOOM engine (doomgeneric + Chocolate Doom OPL music + K15 port)
+  /usr/bin/k15-doom-launch    launcher (input switching, logging)
+  /usr/bin/k15-mqsend         sends the stock UI's own input-switch message
+  /usr/bin/mq_ui              stock FiiO UI, binary-patched to add the DOOM menu entries
+  UI list entries + icons     DOOM tile in the source grid, DOOM in the volume-knob carousel
+
+doomk15, k15-doom-launch and k15-mqsend are free software under the GNU General Public
+License version 2 or (at your option) any later version. Their complete source, the pinned
+upstream versions (doomgeneric, Chocolate Doom 2.3.0) and the build scripts are at:
+
+  https://github.com/aundhe1m/fiio-k15-doom
+
+No game data is included. Put a .wad file (e.g. the shareware doom1.wad, your own
+doom.wad/doom2.wad, or Freedoom) in the root of a USB stick.
+
+FiiO's software in this image remains FiiO's; this image is for the owner's own device
+only. DOOM is a trademark of id Software / ZeniMax; this project is not affiliated with them
+or with FiiO.
+
+Logs: /usr/data/doom/launch.log, /usr/data/doom/doom.log
+Config and savegames: /usr/data/doom/
+Remove all DOOM data: rm -rf /usr/data/doom

@@ -1,0 +1,10 @@
+# Shell scripts, patches and the on-device launcher run in Linux: keep LF even on Windows
+# checkouts with core.autocrlf=true.
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.png binary
+*.jpg binary
+*.zip binary
+*.wad binary
+*.gif binary
+*.svg text
